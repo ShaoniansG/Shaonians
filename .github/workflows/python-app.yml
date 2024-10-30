@@ -1,0 +1,121 @@
+import requests
+import json
+from bs4 import BeautifulSoup
+import schedule
+import time
+import random
+
+
+# 从测试号信息获取
+appID = ""
+appSecret = ""
+# 收信人ID即 用户列表中的微信号，见上文
+openId = ""
+# 天气预报模板ID
+weather_template_id = ""
+
+# 20条喝水提示语句
+water_reminder_sentences = [
+    "记得多喝水，保持身体水分平衡哦！",
+    "水是生命之源，快喝一杯水吧！",
+    "别忘记喝水，让身体充满活力。",
+    "喝口水，润润喉，感觉会很棒。",
+    "一杯水，一份健康，现在就喝。",
+    "多喝水，为身体补充能量。",
+    "身体缺水啦，快喝点水。",
+    "水是健康的守护者，喝起来。",
+    "喝口水，缓解疲劳，精神焕发。",
+    "别让身体干涸，多喝水哦。",
+    "适量饮水，让身体保持良好状态。",
+    "喝水时间到，让身体更滋润。",
+    "补充水分，从一杯水开始。",
+    "水是最好的饮品，多喝点。",
+    "喝些水，为身体的小宇宙加油。",
+    "别忘了给身体的水库加水，喝水。",
+    "喝水有益健康，现在就行动。",
+    "来一杯水，让身体畅快淋漓。",
+    "身体需要水的滋润，喝吧。",
+    "保持水分充足，快乐喝水。"
+]
+
+
+def get_weather():
+    url = "http://www.weather.com.cn/weather1d/101010800.shtml"  # 北京海淀区的天气页面网址
+    resp = requests.get(url)
+    text = resp.content.decode("utf-8")
+    soup = BeautifulSoup(text, 'html5lib')
+    weather_info = soup.find('p', class_='wea').text
+    temp_info = soup.find('p', class_='tem').text
+    wind_info = soup.find('p', class_='win').text.split(' ')
+    wind_dir = wind_info[0] + wind_info[1]
+    return {
+        "region": "北京海淀区",
+        "weather": weather_info,
+        "temp": temp_info,
+        "wind_dir": wind_dir
+    }
+
+
+def get_access_token():
+    url = 'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}' \
+         .format(appID.strip(), appSecret.strip())
+    response = requests.get(url).json()
+    return response.get('access_token')
+
+
+def send_weather_and_water_reminder(access_token, weather_data):
+    import datetime
+    today = datetime.date.today()
+    today_str = today.strftime("%Y年%m月%d日")
+
+    random_water_reminder = random.choice(water_reminder_sentences)
+
+    body = {
+        "touser": openId.strip(),
+        "template_id": weather_template_id.strip(),
+        "url": "https://weixin.qq.com",
+        "data": {
+            "date": {
+                "value": today_str
+            },
+            "region": {
+                "value": weather_data["region"]
+            },
+            "weather": {
+                "value": weather_data["weather"]
+            },
+            "temp": {
+                "value": weather_data["temp"]
+            },
+            "wind_dir": {
+                "value": weather_data["wind_dir"]
+            },
+            "today_note": {
+                "value": random_water_reminder
+            }
+        }
+    }
+    url = 'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}'.format(access_token)
+    print(requests.post(url, json.dumps(body)).text)
+
+
+def job_weather():
+    access_token = get_access_token()
+    weather_data = get_weather()
+    send_weather_and_water_reminder(access_token, weather_data)
+
+
+def job_water():
+    access_token = get_access_token()
+    weather_data = get_weather()
+    send_weather_and_water_reminder(access_token, weather_data)
+
+
+if __name__ == '__main__':
+    schedule.every().day.at("12:00").do(job_weather)
+    for hour in range(10, 22):  # 10点到22点（晚上10点）
+        schedule.every().day.at(f"{hour:02}:00").do(job_water)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)    
